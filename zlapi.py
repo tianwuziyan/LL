@@ -70,11 +70,11 @@ def zlapi_checkin():
 
         final_msg = (
             f"\n{message}\n"
-            f"昨日调用: {calls} 次\n"
             "————————-\n"
+            f"昨日调用: {calls} 次\n"
             f"昨日消费: ¥{consumption:.2f}\n"
             f"预计奖励: {reward_text}\n"
-            "————————-\n"
+            "————————-\n\n"
             "签到：https://qd.zlapi.pro/"
         )
 
