@@ -2,7 +2,7 @@
 
 """
 //name: 宅恋API签到
-//cron: 0 12 * * *
+//cron: 0 0,9 * * *
 """
 
 import os
