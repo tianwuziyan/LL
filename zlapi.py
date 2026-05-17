@@ -121,7 +121,8 @@ def zlapi_checkin():
             f"{message}\n"
             f"昨日调用: {calls} 次\n"
             f"昨日消费: ¥{consumption:.2f}\n"
-            f"预计奖励: {reward_text}"
+            f"预计奖励: {reward_text}\n\n"
+            "签到：https://qd.zlapi.pro/"
         )
 
         print(final_msg)
