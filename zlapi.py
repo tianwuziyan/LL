@@ -129,21 +129,16 @@ def zlapi_checkin():
 # 启动入口
 # =========================
 if __name__ == "__main__":
-    max_random_delay = os.getenv("MAX_RANDOM_DELAY")
+    max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "1800"))
 
-    try:
-        max_random_delay = int(max_random_delay)
-    except:
-        max_random_delay = 0
+    # 随机延迟（秒）
 
-    if max_random_delay <= 0:
-        print("🚀 立即执行")
-        delay = 0
-    else:
-        # 随机延迟（秒）
-        delay = random.randint(0, max_random_delay)
-        # 倒计时执行
-        countdown(delay)
-        
+    delay = random.randint(0, max_random_delay)
+
+    # 倒计时执行
+
+    countdown(delay)
+
     # 执行签到
+
     zlapi_checkin()
