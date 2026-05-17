@@ -20,7 +20,7 @@ def bark_push(title, body):
         print("⚠️ 未配置 BARK_KEY，跳过推送")
         return
 
-    url = f"https://api.day.app/{bark_key}"
+    url = f"https://api.day.app/{BARK_PUSH}"
 
     try:
         data = {
