@@ -24,7 +24,7 @@ PUSH_SWITCH = os.getenv("PUSH_SWITCH", "1")
 
 
 def bark_push(title: str, body: str):
-    """青龙标准 Bark 推送（完全兼容顺丰脚本写法）"""
+    """Bark 推送"""
 
     if PUSH_SWITCH != "1":
         print("📴 推送已关闭")
