@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
+//name: 宅恋API签到
+//cron: 15 12 * * *
 """
 项目：zlapi 签到
 青龙变量：
-ZLAPI_USERNAME：你的用户名
+export ZLAPI_USERNAME="你的用户名"
 """
 
 import os
 import requests
-
+import time
+import random
 
 def zlapi_checkin():
     username = os.getenv("ZLAPI_USERNAME")
@@ -90,4 +93,19 @@ def zlapi_checkin():
 
 
 if __name__ == "__main__":
+
+    # 读取环境变量
+    max_random_delay = os.getenv("MAX_RANDOM_DELAY")
+
+    # 只有值为 0 时立即执行
+    if max_random_delay == "0":
+        print("🚀 已关闭随机延迟，立即执行")
+    else:
+        # 默认随机延迟 0~30 分钟
+        delay = random.randint(0, 1800)
+
+        print(f"⏰ 随机延迟 {delay} 秒后执行")
+
+        time.sleep(delay)
+
     zlapi_checkin()
