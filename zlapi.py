@@ -91,9 +91,9 @@ def zlapi_checkin():
 
 if __name__ == "__main__":
 
-    delay = os.getenv("MAX_RANDOM_DELAY", "0")
+    max_random_delay = os.getenv("MAX_RANDOM_DELAY")
 
-    if delay == "0":
+    if max_random_delay == "0":
         print("🚀 立即执行")
     else:
         t = random.randint(0, 1800)
