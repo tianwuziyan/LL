@@ -9,13 +9,29 @@ import os
 import requests
 import time
 import random
+from datetime import datetime, timedelta
 
-# 统一通知入口
 try:
     from notify import send
 except ImportError:
     def send(title, content):
         print(f"[通知]\n{title}\n{content}")
+
+
+def format_time(seconds: int):
+    """把秒转换为 X分XX秒"""
+    m = seconds // 60
+    s = seconds % 60
+    return m, s
+
+
+def countdown(seconds: int):
+    """最后5秒倒计时"""
+    print("\n⏳ 即将执行任务，开始倒计时：")
+    for i in range(seconds, 0, -1):
+        print(f"⏱ {i}...")
+        time.sleep(1)
+    print("🚀 开始执行任务\n")
 
 
 def zlapi_checkin():
@@ -80,7 +96,6 @@ def zlapi_checkin():
 
         print(final_msg)
 
-        # ⭐ 统一通知出口
         send("宅恋API签到成功", final_msg)
 
     except Exception as e:
@@ -94,10 +109,26 @@ if __name__ == "__main__":
     max_random_delay = os.getenv("MAX_RANDOM_DELAY")
 
     if max_random_delay == "0":
-        print("🚀 立即执行")
+        print("🚀 已关闭延迟，立即执行")
     else:
-        t = random.randint(0, 1800)
-        print(f"⏰ 延迟 {t} 秒")
-        time.sleep(t)
+        # ==============================
+        # 🎯 随机生成：1~10分钟（你可以改）
+        # ==============================
+        delay_seconds = random.randint(60, 600)
+
+        m, s = format_time(delay_seconds)
+
+        now = datetime.now()
+        run_time = now + timedelta(seconds=delay_seconds)
+
+        print(f"⏰ 随机延迟：{m}分{s:02d}秒")
+        print(f"🕒 预计执行时间：{run_time.strftime('%H:%M:%S')}")
+
+        # 🔥 在最后5秒倒计时
+        if delay_seconds > 5:
+            time.sleep(delay_seconds - 5)
+            countdown(5)
+        else:
+            countdown(delay_seconds)
 
     zlapi_checkin()
