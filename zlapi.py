@@ -72,7 +72,7 @@ def zlapi_checkin():
     try:
         res = requests.post(url, headers=headers, json={"username": username}, timeout=15)
 
-        print("状态码:", res.status_code)
+        #print("状态码:", res.status_code)
 
         if res.status_code != 200:
             msg = f"❌ 请求失败：{res.text}"
