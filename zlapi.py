@@ -69,10 +69,12 @@ def zlapi_checkin():
         reward_text = " | ".join(reward_list) if reward_list else "无"
 
         final_msg = (
-            f"{message}\n"
+            f"\n{message}\n"
             f"昨日调用: {calls} 次\n"
+            "————————-\n"
             f"昨日消费: ¥{consumption:.2f}\n"
-            f"预计奖励: {reward_text}\n\n"
+            f"预计奖励: {reward_text}\n"
+            "————————-\n"
             "签到：https://qd.zlapi.pro/"
         )
 
