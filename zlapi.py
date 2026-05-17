@@ -10,9 +10,7 @@ import requests
 import time
 import random
 
-
-# ===== Bark 推送 =====
-def bark_push(title, content):
+def bark_push(title, body):
 
     bark_key = os.getenv("BARK_KEY")
 
@@ -20,14 +18,19 @@ def bark_push(title, content):
         print("⚠️ 未配置 BARK_KEY，跳过推送")
         return
 
-    url = f"https://api.day.app/{bark_key}/{title}/{content}"
+    url = f"https://api.day.app/{bark_key}"
 
     try:
-        requests.get(url, timeout=10)
+        data = {
+            "title": title,
+            "body": body
+        }
+
+        requests.post(url, json=data, timeout=10)
         print("📲 Bark推送成功")
+
     except Exception as e:
         print("❌ Bark推送失败:", str(e))
-
 
 def zlapi_checkin():
 
@@ -51,21 +54,23 @@ def zlapi_checkin():
     try:
         res = requests.post(url, headers=headers, json=data, timeout=15)
 
+        print("状态码:", res.status_code)
+
         if res.status_code != 200:
-            msg = "请求失败"
-            print(msg)
-            bark_push("签到失败", res.text[:200])
+            print("❌ 请求失败")
+            print(res.text)
             return
 
         result = res.json()
 
         message = result.get("message", "未知结果")
 
+        # 昨日数据
         yesterday = result.get("yesterdayStats", {})
         calls = yesterday.get("calls", 0)
         consumption = round(float(yesterday.get("consumption", 0)), 2)
 
-        # ===== 动态奖励 =====
+        # ===== 动态奖励解析（核心）=====
         reward_levels = result.get("rewardLevels", {})
         reward_list = []
 
@@ -82,33 +87,27 @@ def zlapi_checkin():
                 if consumption >= level.get("minConsumption", 0):
                     reward_list.append(f"¥{reward:.2f}")
 
+        # 去重（防止重复档位）
         reward_list = list(dict.fromkeys(reward_list))
+
         reward_text = " | ".join(reward_list) if reward_list else "无"
 
-        # ===== 控制台输出 =====
-        log_text = (
-            f"{message}\n"
+        # ===== 输出日志 =====
+        print(
+            f"✅ {message}\n"
             f"昨日调用: {calls} 次\n"
             f"昨日消费: ¥{consumption:.2f}\n"
             f"预计奖励: {reward_text}"
         )
-
-        print(log_text)
-
-        # ===== Bark推送 =====
-        bark_title = "宅恋API签到"
-        bark_content = (
-            f"{message}\\n"
-            f"调用:{calls} 消费:{consumption:.2f}\\n"
-            f"奖励:{reward_text}"
-        )
-
-        bark_push(bark_title, bark_content)
-
+    bark_push(
+        "宅恋API签到",
+        f"{message}\n"
+        f"调用: {calls}\n"
+        f"消费: {consumption:.2f}\n"
+        f"奖励: {reward_text}"
+    )
     except Exception as e:
-        err = f"异常: {str(e)}"
-        print(err)
-        bark_push("签到异常", err[:200])
+        print("❌ 请求异常:", str(e))
 
 
 if __name__ == "__main__":
