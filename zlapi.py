@@ -10,66 +10,17 @@ import requests
 import time
 import random
 
-
-# ==================== Bark 配置（青龙标准版）====================
-BARK_PUSH = os.getenv("BARK_PUSH")
-BARK_ICON = os.getenv("BARK_ICON", "")
-BARK_SOUND = os.getenv("BARK_SOUND", "")
-BARK_GROUP = os.getenv("BARK_GROUP", "QingLong")
-BARK_LEVEL = os.getenv("BARK_LEVEL", "active")
-BARK_ARCHIVE = os.getenv("BARK_ARCHIVE", "1")
-BARK_URL = os.getenv("BARK_URL", "")
-PUSH_SWITCH = os.getenv("PUSH_SWITCH", "1")
-# ===============================================================
-
-
-def bark_push(title: str, body: str):
-    """Bark 推送"""
-
-    if PUSH_SWITCH != "1":
-        print("📴 推送已关闭")
-        return
-
-    if not BARK_PUSH:
-        print("📴 未配置 BARK_PUSH，跳过推送")
-        return
-
-    # 自动补全 URL
-    bark_url = BARK_PUSH
-    if not bark_url.startswith("http"):
-        bark_url = f"https://api.day.app/{bark_url}"
-
-    data = {
-        "title": title,
-        "body": body,
-        "icon": BARK_ICON,
-        "sound": BARK_SOUND,
-        "group": BARK_GROUP,
-        "level": BARK_LEVEL,
-        "archive": BARK_ARCHIVE,
-        "url": BARK_URL
-    }
-
-    try:
-        res = requests.post(bark_url, json=data, timeout=10)
-        if res.status_code == 200:
-            print("✅ Bark推送成功")
-        else:
-            print(f"⚠️ Bark推送失败: {res.status_code} - {res.text}")
-    except Exception as e:
-        print(f"❌ Bark推送异常: {e}")
+# 统一通知入口
+try:
+    from notify import send
+except ImportError:
+    def send(title, content):
+        print(f"[通知]\n{title}\n{content}")
 
 
 def zlapi_checkin():
 
     username = os.getenv("ZLAPI_USERNAME")
-
-    # ⚠️ 如果你写死账号，就会覆盖环境变量
-    username = "tianwuziyan"
-
-    if not username:
-        print("❌ 未配置 ZLAPI_USERNAME")
-        return
 
     url = "https://qd.zlapi.pro/api/checkin"
 
@@ -86,9 +37,9 @@ def zlapi_checkin():
         print("状态码:", res.status_code)
 
         if res.status_code != 200:
-            msg = f"❌ 请求失败: {res.text}"
+            msg = f"❌ 请求失败：{res.text}"
             print(msg)
-            bark_push("宅恋API签到失败", msg)
+            send("宅恋API签到失败", msg)
             return
 
         result = res.json()
@@ -127,23 +78,24 @@ def zlapi_checkin():
 
         print(final_msg)
 
-        bark_push("宅恋API签到成功", final_msg)
+        # ⭐ 统一通知出口
+        send("宅恋API签到成功", final_msg)
 
     except Exception as e:
         err = f"❌ 请求异常: {str(e)}"
         print(err)
-        bark_push("宅恋API签到异常", err)
+        send("宅恋API签到异常", err)
 
 
 if __name__ == "__main__":
 
-    max_random_delay = os.getenv("MAX_RANDOM_DELAY", "0")
+    delay = os.getenv("MAX_RANDOM_DELAY", "0")
 
-    if max_random_delay == "0":
-        print("🚀 已关闭随机延迟，立即执行")
+    if delay == "0":
+        print("🚀 立即执行")
     else:
-        delay = random.randint(0, 1800)
-        print(f"⏰ 随机延迟 {delay} 秒")
-        time.sleep(delay)
+        t = random.randint(0, 1800)
+        print(f"⏰ 延迟 {t} 秒")
+        time.sleep(t)
 
     zlapi_checkin()
