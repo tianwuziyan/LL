@@ -53,7 +53,7 @@ INFO_URL = (
 
 # ================= 环境变量 =================
 
-enshan_cookie = os.getenv("enshan_cookie", "")
+enshan_cookie = os.getenv("enshan_cookie")
 
 # ================= 工具函数 =================
 
@@ -338,19 +338,14 @@ class EnshanSigner:
 
         result = f"""
 🌟 恩山论坛签到结果
-
 👤 用户: {self.username}
-
 💰 恩山币:
 {self.coin_before} → {self.coin_after}
-
 📊 积分:
 {self.point_before} → {self.point_after}
-
 🎁 收益:
 +{coin_gain} 恩山币
 +{point_gain} 积分
-
 📝 结果:
 {msg}
 
