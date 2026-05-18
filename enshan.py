@@ -22,6 +22,7 @@ try:
 except:
     print("⚠️ notify未加载")
 
+
 # ================= 配置 =================
 
 BASE_URL = "https://www.right.com.cn/forum"
@@ -30,32 +31,21 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/131.0.0.0 Safari/537.36"
+        "Chrome/120.0.0.0 Safari/537.36"
     ),
-    "Accept": (
-        "text/html,application/xhtml+xml,"
-        "application/xml;q=0.9,image/webp,*/*;q=0.8"
-    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9",
-    "Accept-Encoding": "gzip, deflate",
+    "Accept-Encoding": "gzip, deflate",   # ❗禁止 br（服务器关键）
     "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
 }
 
-SIGN_URL = (
-    f"{BASE_URL}/plugin.php?"
-    "id=erling_qd:action&action=sign"
-)
-
-INFO_URL = (
-    f"{BASE_URL}/home.php?"
-    "mod=spacecp&ac=credit"
-)
-
-# ================= 环境变量 =================
+SIGN_URL = f"{BASE_URL}/plugin.php?id=erling_qd:action&action=sign"
+INFO_URL = f"{BASE_URL}/home.php?mod=spacecp&ac=credit"
 
 enshan_cookie = os.getenv("enshan_cookie")
 
-# ================= 工具函数 =================
+# ================= 工具 =================
 
 def notify_user(title, content):
     if hadsend:
@@ -63,167 +53,109 @@ def notify_user(title, content):
             send(title, content)
         except Exception as e:
             print(e)
+    else:
+        print(title, content)
+
 
 def extract_first(text, patterns, default=None, flags=0):
-    for pattern in patterns:
-        match = re.search(pattern, text, flags)
-        if match:
-            return match.group(1).strip()
+    for p in patterns:
+        m = re.search(p, text, flags)
+        if m:
+            return m.group(1).strip()
     return default
+
 
 def extract_number(text):
     if not text:
         return 0
-
     num = re.sub(r"[^\d]", "", str(text))
-
     return int(num) if num else 0
+
 
 def parse_cookies(cookie_str):
     if not cookie_str:
         return []
-
-    cookies = []
-
+    out = []
     for line in cookie_str.split("\n"):
         line = line.strip()
-
         if not line:
             continue
+        out.extend([x.strip() for x in line.split("&&") if x.strip()])
+    return out
 
-        if "&&" in line:
-            cookies.extend(line.split("&&"))
-        else:
-            cookies.append(line)
 
-    return [x.strip() for x in cookies if x.strip()]
-
-# ================= 签到类 =================
+# ================= 核心类 =================
 
 class EnshanSigner:
 
     def __init__(self, cookie, index=1):
-
-        self.index = index
         self.cookie = cookie
+        self.index = index
 
         self.session = requests.Session()
-
         self.session.headers.update(HEADERS)
-
-        self.session.headers.update({
-            "Cookie": cookie
-        })
+        self.session.headers["Cookie"] = cookie
 
         self.formhash = None
 
-        self.username = "未知"
-
+        self.user = "未知"
         self.coin_before = 0
         self.coin_after = 0
-
         self.point_before = 0
         self.point_after = 0
 
-    # ================= 获取formhash =================
-
+    # ---------- 获取formhash（最稳定方式） ----------
     def get_formhash(self):
-
-        print("🔐 获取formhash...")
 
         urls = [
             f"{BASE_URL}/forum.php",
-            BASE_URL,
+            BASE_URL
         ]
 
         for url in urls:
-
             try:
+                r = self.session.get(url, timeout=20)
 
-                response = self.session.get(
-                    url,
-                    timeout=20,
-                    allow_redirects=True
-                )
+                print(f"🔍 访问: {url} -> {r.status_code}")
 
-                print(f"🌐 {url}")
-                print(f"📡 状态码: {response.status_code}")
-
-                if response.status_code != 200:
+                if r.status_code != 200:
                     continue
 
-                html = response.text
+                html = r.text
 
                 self.formhash = extract_first(
                     html,
                     [
-                        r'formhash=([a-f0-9]+)',
-                        r'name="formhash"\s+value="([a-f0-9]+)"'
+                        r'name="formhash"\s+value="([a-zA-Z0-9]+)"',
+                        r'formhash=([a-zA-Z0-9]+)'
                     ],
                     flags=re.I
                 )
 
                 if self.formhash:
-
                     print(f"✅ formhash: {self.formhash}")
-
                     return True
 
             except Exception as e:
-
-                print(f"❌ {e}")
+                print("❌", e)
 
         return False
 
-    # ================= 获取用户信息 =================
-
+    # ---------- 用户信息 ----------
     def get_user_info(self, after=False):
 
         try:
+            r = self.session.get(INFO_URL, timeout=20)
 
-            response = self.session.get(
-                INFO_URL,
-                timeout=20
-            )
+            print(f"👤 用户信息: {r.status_code}")
 
-            print(f"👤 用户信息状态码: {response.status_code}")
-
-            if response.status_code != 200:
+            if r.status_code != 200:
                 return False
 
-            html = response.text
+            html = r.text
 
-            coin = extract_first(
-                html,
-                [
-                    r"恩山币[:：]\s*</em>\s*([^<&\s]+)",
-                    r"恩山币[:：]\s*([^<\s]+)"
-                ],
-                default="0",
-                flags=re.S
-            )
-
-            point = extract_first(
-                html,
-                [
-                    r"积分[:：]\s*</em>\s*([^<&\s]+)",
-                    r"积分[:：]\s*([^<\s]+)"
-                ],
-                default="0",
-                flags=re.S
-            )
-
-            username = extract_first(
-                html,
-                [
-                    r'访问我的空间">([^<]+)</a>',
-                    r'class="vwmy"[^>]*>([^<]+)</a>',
-                ],
-                default="未知用户",
-                flags=re.S
-            )
-
-            self.username = username
+            coin = extract_first(html, [r"恩山币[:：]\s*</em>\s*([^<&\s]+)"], "0", re.S)
+            point = extract_first(html, [r"积分[:：]\s*</em>\s*([^<&\s]+)"], "0", re.S)
 
             if after:
                 self.coin_after = extract_number(coin)
@@ -232,29 +164,38 @@ class EnshanSigner:
                 self.coin_before = extract_number(coin)
                 self.point_before = extract_number(point)
 
+                self.user = extract_first(
+                    html,
+                    [
+                        r'访问我的空间">([^<]+)</a>',
+                        r'class="vwmy"[^>]*>([^<]+)</a>'
+                    ],
+                    "未知用户",
+                    re.S
+                )
+
             return True
 
         except Exception as e:
-
             print(e)
-
             return False
 
-    # ================= 执行签到 =================
-
+    # ---------- 签到 ----------
     def sign(self):
 
         print("📝 开始签到...")
 
+        # ⭐关键：先预热（模拟浏览器）
+        self.session.get(f"{BASE_URL}/forum.php", timeout=20)
+
+        time.sleep(random.uniform(1, 3))
+
         headers = {
             **HEADERS,
-            "X-Requested-With": "XMLHttpRequest",
-            "Origin": "https://www.right.com.cn",
             "Referer": f"{BASE_URL}/forum.php",
-            "Content-Type": (
-                "application/x-www-form-urlencoded;"
-                " charset=UTF-8"
-            ),
+            "Origin": "https://www.right.com.cn",
+            "X-Requested-With": "XMLHttpRequest",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         }
 
         data = {
@@ -262,162 +203,119 @@ class EnshanSigner:
         }
 
         try:
-
-            response = self.session.post(
+            r = self.session.post(
                 SIGN_URL,
                 headers=headers,
                 data=data,
                 timeout=20
             )
 
-            print(f"📡 签到状态码: {response.status_code}")
+            print(f"📡 签到状态码: {r.status_code}")
 
-            if response.status_code != 200:
-                return False, f"HTTP {response.status_code}"
+            text = r.text
 
-            try:
+            # ⭐关键：识别“200但实际是提示页”
+            if "<html" in text and "提示信息" in text:
+                return False, "被风控拦截（提示页）"
 
-                result = response.json()
+            if "已签到" in text:
+                return True, "今日已签到"
 
-                msg = str(
-                    result.get("message", "")
-                )
+            if "成功" in text:
+                return True, "签到成功"
 
-            except:
-
-                msg = response.text
-
-            print(msg)
-
-            if (
-                "成功" in msg
-                or "已签到" in msg
-                or "已经签到" in msg
-            ):
-                return True, msg
-
-            return False, msg
+            return False, text[:150]
 
         except Exception as e:
-
             return False, str(e)
 
-    # ================= 主逻辑 =================
-
+    # ---------- 主流程 ----------
     def run(self):
 
-        print(f"\n========== 账号{self.index} ==========")
+        print(f"\n==== 账号{self.index} 开始 ====")
 
         if not self.get_formhash():
+            return False, "获取formhash失败（Cookie/IP问题）"
 
-            return (
-                "❌ 获取formhash失败\n\n"
-                "1. Cookie失效\n"
-                "2. Cookie不完整\n"
-                "3. IP被521风控\n\n"
-                "必须重新抓完整Cookie"
-            )
-
-        self.get_user_info(after=False)
-
-        time.sleep(random.uniform(2, 5))
-
-        success, msg = self.sign()
+        self.get_user_info(False)
 
         time.sleep(random.uniform(2, 4))
 
-        self.get_user_info(after=True)
+        ok, msg = self.sign()
 
-        coin_gain = (
-            self.coin_after - self.coin_before
-        )
+        time.sleep(random.uniform(2, 4))
 
-        point_gain = (
-            self.point_after - self.point_before
-        )
+        self.get_user_info(True)
+
+        coin_gain = self.coin_after - self.coin_before
+        point_gain = self.point_after - self.point_before
 
         result = f"""
-🌟 恩山论坛签到结果
-👤 用户: {self.username}
-💰 恩山币:
-{self.coin_before} → {self.coin_after}
-📊 积分:
-{self.point_before} → {self.point_after}
+🌟 恩山签到结果
+
+👤 用户: {self.user}
+
+💰 恩山币: {self.coin_before} → {self.coin_after}
+📊 积分: {self.point_before} → {self.point_after}
+
 🎁 收益:
-+{coin_gain} 恩山币
++{coin_gain} 币
 +{point_gain} 积分
-📝 结果:
+
+📝 签到结果:
 {msg}
 
-⏰ 时间:
-{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+⏰ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
 
-        return result
+        return ok, result
 
-# ================= 主入口 =================
+
+# ================= 主程序 =================
 
 def main():
 
-    print(
-        f"==== 恩山签到开始 "
-        f"{datetime.now()} ===="
-    )
+    print("==== 恩山论坛签到开始 ====")
 
     if not enshan_cookie:
-
-        notify_user(
-            "恩山签到失败",
-            "未配置 enshan_cookie"
-        )
-
+        notify_user("恩山签到失败", "未配置cookie")
         return
 
     cookies = parse_cookies(enshan_cookie)
 
-    print(f"📦 共{len(cookies)}个账号")
+    print(f"📦 账号数: {len(cookies)}")
 
-    for index, cookie in enumerate(cookies):
+    success = 0
+
+    for i, cookie in enumerate(cookies):
 
         try:
+            signer = EnshanSigner(cookie, i + 1)
 
-            signer = EnshanSigner(
-                cookie,
-                index + 1
-            )
+            ok, msg = signer.run()
 
-            result = signer.run()
-
-            print(result)
+            if ok:
+                success += 1
 
             notify_user(
-                f"恩山论坛账号{index+1}",
-                result
+                f"账号{i+1}{'成功' if ok else '失败'}",
+                msg
             )
 
-            time.sleep(
-                random.uniform(10, 20)
-            )
+            time.sleep(random.uniform(8, 15))
 
         except Exception as e:
+            notify_user(f"账号{i+1}异常", str(e))
 
-            error = (
-                f"账号{index+1}异常:\n{e}"
-            )
+    notify_user(
+        "签到汇总",
+        f"成功 {success}/{len(cookies)}"
+    )
 
-            print(error)
-
-            notify_user(
-                f"恩山论坛账号{index+1}失败",
-                error
-            )
-
-    print("==== 全部完成 ====")
-
-# ================= 云函数入口 =================
 
 def handler(event, context):
     main()
+
 
 if __name__ == "__main__":
     main()
