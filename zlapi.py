@@ -100,11 +100,11 @@ def zlapi_checkin():
 
             r_type = level.get("type")
 
-            min_reward = float(level.get("minRewardYuan", 0))
-            max_reward = float(level.get("maxRewardYuan", 0))
+            min_reward = round(float(level.get("minRewardYuan", 0)), 2)
+            max_reward = round(float(level.get("maxRewardYuan", 0)), 2)
 
-            # 格式化奖励文本
-            if min_reward == max_reward:
+            # 奖励文本格式化
+            if abs(min_reward - max_reward) < 0.0001:
                 reward_text_tmp = f"¥{min_reward:.2f}"
             else:
                 reward_text_tmp = f"¥{min_reward:.2f}-¥{max_reward:.2f}"
@@ -115,7 +115,7 @@ def zlapi_checkin():
                 if calls >= int(level.get("minCalls", 0)):
                     base_reward = reward_text_tmp
 
-            # consumption 消费档（取最高档）
+            # consumption 消费奖励（取最高档）
             elif r_type == "consumption":
 
                 if consumption_raw >= float(level.get("minConsumption", 0)):
@@ -148,8 +148,9 @@ def zlapi_checkin():
 # =========================
 if __name__ == "__main__":
     max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "1800"))
-    
+
     # 随机延迟（秒）
+
     delay = random.randint(0, max_random_delay)
 
     # 倒计时执行
