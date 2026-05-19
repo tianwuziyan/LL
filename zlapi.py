@@ -86,25 +86,43 @@ def zlapi_checkin():
 
         yesterday = result.get("yesterdayStats", {})
         calls = yesterday.get("calls", 0)
-        consumption = round(float(yesterday.get("consumption", 0)), 2)
 
         reward_levels = result.get("rewardLevels", {})
-        reward_list = []
+
+        base_reward = None
+        consume_reward = None
+
+        # 原始消费值（用于判断）
+        consumption_raw = float(yesterday.get("consumption", 0))
+        consumption = round(consumption_raw, 2)
 
         for _, level in reward_levels.items():
+
             r_type = level.get("type")
-            reward = level.get("minRewardYuan", 0)
 
+            min_reward = float(level.get("minRewardYuan", 0))
+            max_reward = float(level.get("maxRewardYuan", 0))
+
+            # 格式化奖励文本
+            if min_reward == max_reward:
+                reward_text_tmp = f"¥{min_reward:.2f}"
+            else:
+                reward_text_tmp = f"¥{min_reward:.2f}-¥{max_reward:.2f}"
+
+            # calls 基础奖励
             if r_type == "calls":
-                if calls >= level.get("minCalls", 0):
-                    reward_list.append(f"¥{reward:.2f}")
 
+                if calls >= int(level.get("minCalls", 0)):
+                    base_reward = reward_text_tmp
+
+            # consumption 消费档（取最高档）
             elif r_type == "consumption":
-                if consumption >= level.get("minConsumption", 0):
-                    reward_list.append(f"¥{reward:.2f}")
 
-        reward_list = list(dict.fromkeys(reward_list))
-        reward_text = " | ".join(reward_list) if reward_list else "无"
+                if consumption_raw >= float(level.get("minConsumption", 0)):
+                    consume_reward = reward_text_tmp
+
+        # 优先显示消费档
+        reward_text = consume_reward or base_reward or "无"
 
         final_msg = (
             f"\n{message}\n"
@@ -130,15 +148,12 @@ def zlapi_checkin():
 # =========================
 if __name__ == "__main__":
     max_random_delay = int(os.getenv("MAX_RANDOM_DELAY", "1800"))
-
+    
     # 随机延迟（秒）
-
     delay = random.randint(0, max_random_delay)
 
     # 倒计时执行
-
     countdown(delay)
 
     # 执行签到
-
     zlapi_checkin()
