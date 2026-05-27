@@ -105,8 +105,7 @@ class SXMD:
         return "未知"
 
     def run(self):
-        print(f"
-========== {self.account} ==========")
+        print(f"\n========== {self.account} ==========")
 
         self.login()
 
