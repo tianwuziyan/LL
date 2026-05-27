@@ -59,13 +59,11 @@ def get_formhash(self):
     r = self.session.get(url)
     text = r.text
 
-    # 调试用
     # print(text)
 
     if "已经签到过了" in text:
         return None
 
-    # 新版匹配
     patterns = [
         r'name="formhash" value="(.*?)"',
         r'formhash=(.*?)"',
