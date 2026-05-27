@@ -53,19 +53,32 @@ class SXMD:
         if not self.session.cookies:
             raise Exception("登录失败")
 
-    def get_formhash(self):
-        url = f"http://{HOST}/plugin.php?id=dsu_paulsign:sign&mobile=yes"
+def get_formhash(self):
+    url = f"http://{HOST}/plugin.php?id=dsu_paulsign:sign&mobile=yes"
 
-        r = self.session.get(url)
-        text = r.text
+    r = self.session.get(url)
+    text = r.text
 
-        if "已经签到过了" in text:
-            return None
+    # 调试用
+    # print(text)
 
-        formhash = re.search(r"formhash=(.*?)\"", text)
+    if "已经签到过了" in text:
+        return None
 
-        if not formhash:
-            raise Exception("获取formhash失败")
+    # 新版匹配
+    patterns = [
+        r'name="formhash" value="(.*?)"',
+        r'formhash=(.*?)"',
+        r'formhash=(.*?)&',
+    ]
+
+    for p in patterns:
+        formhash = re.search(p, text)
+
+        if formhash:
+            return formhash.group(1)
+
+    raise Exception("获取formhash失败")
 
         return formhash.group(1)
 
