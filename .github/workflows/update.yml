@@ -1,5 +1,5 @@
 
-name: Update Surge Rules
+name: Update Adobe Surge List
 
 on:
   schedule:
@@ -7,74 +7,176 @@ on:
 
   workflow_dispatch:
 
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/update.yml'
+
 permissions:
   contents: write
 
 concurrency:
-  group: update-surge-rules
+  group: update-adobe-list
   cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    env:
-      SOURCE_URL: https://www.macat.vip/list.txt
-      OUTPUT_FILE: adobe.list
-      MIN_DOMAIN_COUNT: '1'
-      MAX_DROP_PERCENT: '50'
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
-      - name: Convert Hosts to Surge Rules
-        run: python scripts/convert.py
-
-      - name: Keep Repository Active
+      - name: Download and Convert Hosts
         run: |
-          LAST_COMMIT=$(git log -1 --format=%ct)
-          NOW=$(date -u +%s)
+          python - <<'PY'
+          import re
+          import sys
+          import ipaddress
+          import urllib.request
+          from pathlib import Path
 
-          AGE=$(( (NOW - LAST_COMMIT) / 86400 ))
+          SOURCE_URL = "https://www.macat.vip/list.txt"
+          OUTPUT_FILE = Path("adobe.list")
 
-          echo "最近提交距今: ${AGE} 天"
+          DOMAIN_PATTERN = re.compile(
+              r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+              r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
+          )
 
-          if [ "$AGE" -ge 45 ]; then
-            mkdir -p maintenance
-            date -u +'%Y-%m-%d' > maintenance/heartbeat.txt
-            echo "已更新仓库保活文件"
-          else
-            echo "仓库活动正常，无需保活提交"
+          def fetch():
+              request = urllib.request.Request(
+                  SOURCE_URL,
+                  headers={"User-Agent": "Mozilla/5.0"}
+              )
+
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  data = response.read()
+
+              if not data:
+                  raise RuntimeError("源文件为空")
+
+              if b"<html" in data[:2048].lower():
+                  raise RuntimeError("源地址返回 HTML")
+
+              for encoding in ("utf-8-sig", "gb18030"):
+                  try:
+                      return data.decode(encoding)
+                  except UnicodeDecodeError:
+                      continue
+
+              raise RuntimeError("无法识别文件编码")
+
+          def valid_domain(domain):
+              domain = domain.lower().rstrip(".")
+
+              if not domain or len(domain) > 253:
+                  return False
+
+              try:
+                  ipaddress.ip_address(domain)
+                  return False
+              except ValueError:
+                  pass
+
+              if not DOMAIN_PATTERN.fullmatch(domain):
+                  return False
+
+              return all(
+                  len(label) <= 63
+                  for label in domain.split(".")
+              )
+
+          def convert(text):
+              domains = set()
+
+              for raw_line in text.splitlines():
+                  line = raw_line.strip()
+
+                  if not line or line.startswith("#"):
+                      continue
+
+                  line = line.split("#", 1)[0].strip()
+                  parts = line.split()
+
+                  if len(parts) < 2:
+                      continue
+
+                  try:
+                      ip = str(ipaddress.ip_address(parts[0]))
+                  except ValueError:
+                      continue
+
+                  if ip != "0.0.0.0":
+                      continue
+
+                  for domain in parts[1:]:
+                      domain = domain.lower().rstrip(".")
+
+                      if valid_domain(domain):
+                          domains.add(domain)
+
+              if not domains:
+                  raise RuntimeError(
+                      "没有提取到有效域名，禁止覆盖旧文件"
+                  )
+
+              return "\n".join(
+                  f"DOMAIN,{domain}"
+                  for domain in sorted(domains)
+              ) + "\n"
+
+          try:
+              source = fetch()
+              result = convert(source)
+
+              temp_file = OUTPUT_FILE.with_suffix(".tmp")
+              temp_file.write_text(result, encoding="utf-8")
+              temp_file.replace(OUTPUT_FILE)
+
+              print(f"成功生成 {len(result.splitlines())} 条规则")
+              print(f"输出文件：{OUTPUT_FILE}")
+
+          except Exception as error:
+              print(f"处理失败：{error}", file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - name: Validate Output
+        run: |
+          test -s adobe.list
+
+          COUNT=$(grep -c '^DOMAIN,' adobe.list)
+
+          echo "规则数量：$COUNT"
+
+          if [ "$COUNT" -lt 1 ]; then
+            echo "规则数量异常"
+            exit 1
           fi
+
+      - name: Keep Repository Alive
+        run: |
+          date -u +"Last successful update: %Y-%m-%d %H:%M UTC" \
+            > .github/heartbeat.txt
 
       - name: Commit Changes
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add adobe.list maintenance/heartbeat.txt
+          git add adobe.list .github/heartbeat.txt
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update Surge rules and maintenance"
+            git commit -m "Update Adobe Surge list"
             git push
-            echo "更新成功"
           else
-            echo "没有变化，无需提交"
+            echo "没有变化"
           fi
-
-      - name: Show Result
-        run: |
-          echo "规则数量:"
-          grep -c '^DOMAIN,' adobe.list
-
-          echo "文件大小:"
-          wc -c adobe.list
