@@ -16,7 +16,7 @@ jobs:
 
     env:
       SOURCE_URL: https://www.macat.vip/list.txt
-      OUTPUT_FILE: rules.list
+      OUTPUT_FILE: Adobe.list
       REMOVE_TEXT: '0.0.0.0'
 
     steps:
@@ -36,7 +36,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add rules.list
+          git add Adobe.list
 
           if ! git diff --cached --quiet; then
             git commit -m "Update Surge rules"
