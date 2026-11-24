@@ -13,7 +13,7 @@ SOURCE_URL = os.getenv(
 )
 
 OUTPUT_FILE = Path(
-    os.getenv("OUTPUT_FILE", "rules.list")
+    os.getenv("OUTPUT_FILE", "adobe.list")
 )
 
 BLOCK_IP = "0.0.0.0"
