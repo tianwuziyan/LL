@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Download and Update Lists
+      - name: Download and Convert Hosts
         run: |
           python - <<'PY'
           import re
@@ -42,41 +42,17 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          SOURCES = [
-              {
-                  "name": "macat Hosts",
-                  "url": "https://www.macat.vip/list.txt",
-                  "output": Path("adobe.list"),
-                  "mode": "hosts",
-              },
-              {
-                  "name": "Kelee Adobe",
-                  "url": "https://rule.kelee.one/Clash/Adobe.yaml",
-                  "output": Path("adobe-kelee.list"),
-                  "mode": "surge",
-              },
-              {
-                  "name": "Kelee AdobeActivation",
-                  "url": "https://rule.kelee.one/Clash/AdobeActivation.yaml",
-                  "output": Path("adobe-activation.list"),
-                  "mode": "surge",
-              },
-          ]
-
-          MINIMUM_RETAIN_RATIO = 0.5
+          SOURCE_URL = "https://www.macat.vip/list.txt"
+          OUTPUT_FILE = Path("adobe.list")
 
           DOMAIN_PATTERN = re.compile(
               r"^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
               r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
           )
 
-          RULE_PATTERN = re.compile(
-              r"^[A-Z][A-Z0-9-]*,"
-          )
-
-          def fetch(url):
+          def fetch():
               request = urllib.request.Request(
-                  url,
+                  SOURCE_URL,
                   headers={"User-Agent": "Mozilla/5.0"}
               )
 
@@ -84,11 +60,9 @@ jobs:
                   data = response.read()
 
               if not data:
-                  raise RuntimeError("下载内容为空")
+                  raise RuntimeError("源文件为空")
 
-              if data.lstrip().lower().startswith(
-                  (b"<!doctype html", b"<html")
-              ):
+              if b"<html" in data[:2048].lower():
                   raise RuntimeError("源地址返回 HTML")
 
               for encoding in ("utf-8-sig", "gb18030"):
@@ -119,7 +93,7 @@ jobs:
                   for label in domain.split(".")
               )
 
-          def convert_hosts(text):
+          def convert(text):
               domains = set()
               header_lines = []
               in_header = True
@@ -127,6 +101,7 @@ jobs:
               for raw_line in text.splitlines():
                   line = raw_line.strip()
 
+                  # 保留文件顶部的说明注释
                   if in_header:
                       if not line or line.startswith("#"):
                           header_lines.append(raw_line)
@@ -157,7 +132,9 @@ jobs:
                           domains.add(domain)
 
               if not domains:
-                  raise RuntimeError("没有提取到有效域名")
+                  raise RuntimeError(
+                      "没有提取到有效域名，禁止覆盖旧文件"
+                  )
 
               rules = "\n".join(
                   f"DOMAIN,{domain}"
@@ -171,118 +148,44 @@ jobs:
 
               return rules + "\n"
 
-          def validate_surge(text):
-              lines = [
-                  line.strip()
-                  for line in text.splitlines()
-                  if line.strip() and not line.lstrip().startswith("#")
-              ]
+          try:
+              source = fetch()
+              result = convert(source)
 
-              rules = [
-                  line for line in lines
-                  if RULE_PATTERN.match(line)
-              ]
-
-              if not rules:
-                  raise RuntimeError("没有发现有效 Surge 规则")
-
-              if len(rules) != len(lines):
-                  raise RuntimeError("发现无法识别的规则行，拒绝覆盖旧文件")
-
-              return len(rules)
-
-          def update_source(source):
-              output = source["output"]
-
-              print(f"\n开始处理：{source['name']}")
-
-              text = fetch(source["url"])
-
-              if source["mode"] == "hosts":
-                  result = convert_hosts(text)
-                  new_count = sum(
-                      1 for line in result.splitlines()
-                      if line.startswith("DOMAIN,")
-                  )
-              else:
-                  new_count = validate_surge(text)
-                  result = text
-
-              if not result.strip():
-                  raise RuntimeError("生成内容为空")
-
-              if output.exists():
-                  old_text = output.read_text(
-                      encoding="utf-8",
-                      errors="replace"
-                  )
-
-                  if source["mode"] == "hosts":
-                      old_count = sum(
-                          1 for line in old_text.splitlines()
-                          if line.startswith("DOMAIN,")
-                      )
-                  else:
-                      old_count = sum(
-                          1 for line in old_text.splitlines()
-                          if RULE_PATTERN.match(line.strip())
-                      )
-
-                  if old_count > 0:
-                      minimum = int(old_count * MINIMUM_RETAIN_RATIO)
-
-                      if new_count < minimum:
-                          raise RuntimeError(
-                              f"规则数量异常减少："
-                              f"旧版 {old_count} 条，新版 {new_count} 条，"
-                              f"低于保护阈值 {minimum} 条"
-                          )
-
-              temp_file = output.with_suffix(".tmp")
+              temp_file = OUTPUT_FILE.with_suffix(".tmp")
               temp_file.write_text(result, encoding="utf-8")
-              temp_file.replace(output)
+              temp_file.replace(OUTPUT_FILE)
 
-              print(f"更新成功：{output}")
-              print(f"规则数量：{new_count}")
+              rule_count = sum(
+                  1 for line in result.splitlines()
+                  if line.startswith("DOMAIN,")
+              )
 
-          success_count = 0
-          failure_count = 0
+              print(f"成功生成 {rule_count} 条规则")
+              print(f"输出文件：{OUTPUT_FILE}")
 
-          for source in SOURCES:
-              try:
-                  update_source(source)
-                  success_count += 1
-              except Exception as error:
-                  failure_count += 1
-                  print(
-                      f"\n处理失败：{source['name']}：{error}",
-                      file=sys.stderr
-                  )
-
-          print("\n========== 更新结果 ==========")
-          print(f"成功：{success_count}")
-          print(f"失败：{failure_count}")
-
-          if success_count == 0:
-              print("所有来源均更新失败", file=sys.stderr)
+          except Exception as error:
+              print(f"处理失败：{error}", file=sys.stderr)
               sys.exit(1)
           PY
 
       - name: Validate Output
         run: |
-          for file in adobe.list adobe-kelee.list adobe-activation.list; do
-            if [ -f "$file" ]; then
-              echo "检查：$file"
-              test -s "$file"
-            fi
-          done
+          test -s adobe.list
+
+          COUNT=$(grep -c '^DOMAIN,' adobe.list || true)
+
+          echo "规则数量：$COUNT"
+
+          if [ "$COUNT" -lt 1 ]; then
+            echo "规则数量异常"
+            exit 1
+          fi
 
       - name: Keep Repository Alive
         run: |
-          mkdir -p .github
           date -u +"Last successful update: %Y-%m-%d %H:%M UTC" \
             > .github/heartbeat.txt
-
 
       - name: Commit Changes
         run: |
@@ -290,16 +193,10 @@ jobs:
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
 
-          for file in adobe.list adobe-kelee.list adobe-activation.list; do
-            if [ -f "$file" ]; then
-              git add "$file"
-            fi
-          done
-
-          git add .github/heartbeat.txt
+          git add adobe.list .github/heartbeat.txt
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update Adobe Surge lists"
+            git commit -m "Update Adobe Surge list"
             git push
           else
             echo "没有变化"
