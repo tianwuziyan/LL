@@ -10,37 +10,71 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: update-surge-rules
+  cancel-in-progress: false
+
 jobs:
   update:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     env:
       SOURCE_URL: https://www.macat.vip/list.txt
-      OUTPUT_FILE: Adobe.list
-      REMOVE_TEXT: '0.0.0.0'
+      OUTPUT_FILE: rules.list
+      MIN_DOMAIN_COUNT: '1'
+      MAX_DROP_PERCENT: '50'
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Download and Clean Rules
-        run: python scripts/clean_list.py
+      - name: Convert Hosts to Surge Rules
+        run: python scripts/convert.py
 
-      - name: Commit Updated Rules
+      - name: Keep Repository Active
+        run: |
+          LAST_COMMIT=$(git log -1 --format=%ct)
+          NOW=$(date -u +%s)
+
+          AGE=$(( (NOW - LAST_COMMIT) / 86400 ))
+
+          echo "最近提交距今: ${AGE} 天"
+
+          if [ "$AGE" -ge 45 ]; then
+            mkdir -p maintenance
+            date -u +'%Y-%m-%d' > maintenance/heartbeat.txt
+            echo "已更新仓库保活文件"
+          else
+            echo "仓库活动正常，无需保活提交"
+          fi
+
+      - name: Commit Changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add Adobe.list
+          git add rules.list maintenance/heartbeat.txt
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update Surge rules"
+            git commit -m "Update Surge rules and maintenance"
             git push
+            echo "更新成功"
           else
-            echo "Rules unchanged, skip commit."
+            echo "没有变化，无需提交"
           fi
+
+      - name: Show Result
+        run: |
+          echo "规则数量:"
+          grep -c '^DOMAIN,' rules.list
+
+          echo "文件大小:"
+          wc -c rules.list
