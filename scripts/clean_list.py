@@ -3,12 +3,12 @@ import os
 import urllib.request
 from pathlib import Path
 
-SOURCE_URL = os.environ["SOURCE_URL"]
-REMOVE_TEXT = os.environ["REMOVE_TEXT"].encode("utf-8")
-OUTPUT_FILE = Path(os.environ["OUTPUT_FILE"])
+source_url = os.environ["SOURCE_URL"]
+target_file = Path(os.environ["OUTPUT_FILE"])
+remove_text = os.environ["REMOVE_TEXT"].encode("ascii")
 
 request = urllib.request.Request(
-    SOURCE_URL,
+    source_url,
     headers={"User-Agent": "GitHub-Actions"}
 )
 
@@ -16,13 +16,14 @@ with urllib.request.urlopen(request, timeout=60) as response:
     content = response.read()
 
 if not content:
-    raise RuntimeError("下载内容为空，停止更新")
+    raise RuntimeError("下载内容为空，取消更新")
 
-result = content.replace(REMOVE_TEXT, b"")
+cleaned = content.replace(remove_text, b"")
 
-OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
-OUTPUT_FILE.write_bytes(result)
+target_file.parent.mkdir(parents=True, exist_ok=True)
+target_file.write_bytes(cleaned)
 
 print(f"原始大小：{len(content)} bytes")
-print(f"处理后大小：{len(result)} bytes")
-print("规则文件更新完成")
+print(f"处理后大小：{len(cleaned)} bytes")
+print(f"删除数量：{(len(content) - len(cleaned)) // len(remove_text)}")
+print(f"输出文件：{target_file}")
