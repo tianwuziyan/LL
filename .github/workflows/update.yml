@@ -93,63 +93,60 @@ jobs:
                   for label in domain.split(".")
               )
 
-          
-            def convert(text):
-                domains = set()
-                header_lines = []
-                in_header = True
-            
-                for raw_line in text.splitlines():
-                    line = raw_line.strip()
-            
-                    # 保留文件开头的注释区块及其中的空行
-                    if in_header:
-                        if not line or line.startswith("#"):
-                            header_lines.append(raw_line)
-                            continue
-                        in_header = False
-            
-                    if not line or line.startswith("#"):
-                        continue
-            
-                    line = line.split("#", 1)[0].strip()
-                    parts = line.split()
-            
-                    if len(parts) < 2:
-                        continue
-            
-                    try:
-                        ip = str(ipaddress.ip_address(parts[0]))
-                    except ValueError:
-                        continue
-            
-                    if ip != "0.0.0.0":
-                        continue
-            
-                    for domain in parts[1:]:
-                        domain = domain.lower().rstrip(".")
-            
-                        if valid_domain(domain):
-                            domains.add(domain)
-            
-                if not domains:
-                    raise RuntimeError(
-                        "没有提取到有效域名，禁止覆盖旧文件"
-                    )
-            
-                rules = "\n".join(
-                    f"DOMAIN,{domain}"
-                    for domain in sorted(domains)
-                )
-            
-                # 注释区块放在规则最前面
-                header = "\n".join(header_lines).strip()
-            
-                if header:
-                    return header + "\n\n" + rules + "\n"
-            
-                return rules + "\n"
+          def convert(text):
+              domains = set()
+              header_lines = []
+              in_header = True
 
+              for raw_line in text.splitlines():
+                  line = raw_line.strip()
+
+                  # 保留文件顶部的说明注释
+                  if in_header:
+                      if not line or line.startswith("#"):
+                          header_lines.append(raw_line)
+                          continue
+                      in_header = False
+
+                  if not line or line.startswith("#"):
+                      continue
+
+                  line = line.split("#", 1)[0].strip()
+                  parts = line.split()
+
+                  if len(parts) < 2:
+                      continue
+
+                  try:
+                      ip = str(ipaddress.ip_address(parts[0]))
+                  except ValueError:
+                      continue
+
+                  if ip != "0.0.0.0":
+                      continue
+
+                  for domain in parts[1:]:
+                      domain = domain.lower().rstrip(".")
+
+                      if valid_domain(domain):
+                          domains.add(domain)
+
+              if not domains:
+                  raise RuntimeError(
+                      "没有提取到有效域名，禁止覆盖旧文件"
+                  )
+
+              rules = "\n".join(
+                  f"DOMAIN,{domain}"
+                  for domain in sorted(domains)
+              )
+
+              header = "\n".join(header_lines).strip()
+
+              if header:
+                  return header + "\n\n" + rules + "\n"
+
+              return rules + "\n"
 
           try:
               source = fetch()
@@ -159,7 +156,12 @@ jobs:
               temp_file.write_text(result, encoding="utf-8")
               temp_file.replace(OUTPUT_FILE)
 
-              print(f"成功生成 {len(result.splitlines())} 条规则")
+              rule_count = sum(
+                  1 for line in result.splitlines()
+                  if line.startswith("DOMAIN,")
+              )
+
+              print(f"成功生成 {rule_count} 条规则")
               print(f"输出文件：{OUTPUT_FILE}")
 
           except Exception as error:
@@ -171,7 +173,7 @@ jobs:
         run: |
           test -s adobe.list
 
-          COUNT=$(grep -c '^DOMAIN,' adobe.list)
+          COUNT=$(grep -c '^DOMAIN,' adobe.list || true)
 
           echo "规则数量：$COUNT"
 
