@@ -283,14 +283,20 @@ jobs:
           date -u +"Last successful update: %Y-%m-%d %H:%M UTC" \
             > .github/heartbeat.txt
 
+
       - name: Commit Changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email \
             "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add adobe.list adobe-kelee.list adobe-activation.list \
-            .github/heartbeat.txt
+          for file in adobe.list adobe-kelee.list adobe-activation.list; do
+            if [ -f "$file" ]; then
+              git add "$file"
+            fi
+          done
+
+          git add .github/heartbeat.txt
 
           if ! git diff --cached --quiet; then
             git commit -m "Update Adobe Surge lists"
